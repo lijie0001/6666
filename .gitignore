@@ -23,3 +23,6 @@ build/
 # Environment variables
 .env
 .env.local
+
+# 本地文档，不推送到远程
+GITHUB_PUSH.md
