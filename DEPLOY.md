@@ -32,6 +32,7 @@ git push -u origin main
 3. 选择你的仓库
 4. 进入项目 → **Variables** → 添加环境变量：
    - `TELEGRAM_BOT_TOKEN` = 你的 Bot Token
+   - `OPENAI_API_KEY` = 你的 OpenAI API Key（用于 AI 智能回复）
 5. 点击 **Settings** → **Service** → 确认 **Start Command** 为 `python telegram_bot.py`（或留空，Railway 会用 Procfile）
 6. 若需指定为 Worker：在 **Settings** 中把 Service 类型设为 **Worker**（部分模板会自动识别 Procfile 的 worker）
 
