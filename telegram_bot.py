@@ -40,7 +40,7 @@ def main():
         print("错误：请先在 .env 文件中配置 TELEGRAM_BOT_TOKEN")
         return
 
-    # 配置请求：代理（国内需配置）、超时
+    # 配置请求：代理（国内需配置）、超时  
     request = HTTPXRequest(
         connect_timeout=60,
         read_timeout=60,
