@@ -1,0 +1,5 @@
+# Python 项目依赖
+# 在此添加项目所需的包，例如：
+requests>=2.28.0
+python-dotenv>=1.0.0
+python-telegram-bot>=21.0
