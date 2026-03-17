@@ -1,18 +1,18 @@
 """
 猜数字游戏
-电脑随机想一个 1-100 的数字，你来猜！
+电脑随机想一个 1-1100 的数字，你来猜！
 """
 
 import random
 
 
 def main():
-    # 1. 电脑随机生成 1-100 的数字
-    secret = random.randint(1, 100)
+    # 随机生成 1-1100 的数字
+    secret = random.randint(1, 1100)
     guess_count = 0
 
     print("=" * 40)
-    print("  猜数字游戏：我想了一个 1-100 的数字")
+    print("  猜数字游戏：我想了一个 1-1100 的数字")
     print("=" * 40)
 
     while True:
