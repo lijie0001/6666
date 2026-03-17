@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>爬虫展示</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; background: #1a1a2e; color: #eee; }
+    h1 { color: #e94560; margin-bottom: 1.5rem; }
+    .item { padding: 0.8rem; margin: 0.5rem 0; background: #16213e; border-radius: 8px; }
+    .item a { color: #e94560; text-decoration: none; }
+    .item a:hover { text-decoration: underline; }
+    .meta { font-size: 0.85rem; color: #888; margin-top: 0.3rem; }
+  </style>
+</head>
+<body>
+  <h1>123123 </h1>
+  <p>以下为爬 列表：</p>
+  <div class="list">
+    {% for item in items %}
+    <div class="item">
+      <span class="title">{{ item.title }}</span>
+      {% if item.meta %}<div class="meta">{{ item.meta }}</div>{% endif %}
+    </div>
+    {% else %}
+    <p>暂无数据</p>
+    {% endfor %}
+  </div>
+</body>
+</html>
