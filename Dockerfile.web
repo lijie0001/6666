@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py crawler.py .
+COPY app.py crawler.py image_crawler.py .
 COPY templates/ templates/
 
 ENV PORT=5000

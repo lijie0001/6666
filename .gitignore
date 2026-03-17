@@ -26,3 +26,6 @@ build/
 
 # 本地文档，不推送到远程
 GITHUB_PUSH.md
+
+# 爬虫数据
+data/

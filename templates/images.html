@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图片爬虫</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 2rem; background: #1a1a2e; color: #eee; }
+    h1 { color: #e94560; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .card { background: #16213e; border-radius: 8px; overflow: hidden; }
+    .card img { width: 100%; height: 150px; object-fit: cover; display: block; }
+    .card .info { padding: 0.5rem; font-size: 0.85rem; color: #888; }
+    .card a { color: #e94560; font-size: 0.75rem; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1></h1>
+  <div class="grid">
+    {% for item in items %}
+    {% if item.url %}
+    <div class="card">
+      <img src="{{ item.url }}" alt="{{ item.author }}" loading="lazy">
+      <div class="info">{{ item.author }}</div>
+      <div class="info"><a href="{{ item.url }}" target="_blank">原图</a></div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</body>
+</html>
