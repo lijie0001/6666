@@ -2,15 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 只安装网页需要的依赖，加快构建
+RUN pip install --no-cache-dir flask requests beautifulsoup4 python-dotenv
 
 COPY app.py crawler.py image_crawler.py .
 COPY templates/ templates/
-COPY start_web.sh .
-RUN chmod +x start_web.sh
 
+# Railway 注入 PORT，必须监听 0.0.0.0
+ENV PORT=5000
 EXPOSE 5000
 
-# 优先用 gunicorn；若失败可改为 CMD ["python", "app.py"]
-CMD ["./start_web.sh"]
+CMD ["python", "app.py"]

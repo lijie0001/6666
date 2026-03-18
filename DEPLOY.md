@@ -61,10 +61,11 @@ git push -u origin main
 2. **Start Command** 留空（Dockerfile 已指定）或填：`python app.py`
 3. **Pre-deploy command** 留空
 
-### 4. 生成域名
+### 4. 关键配置（必改）
 
-1. **Settings** → **Networking** → **Generate Domain**
-2. 获得类似 `xxx.web.app` 的访问地址
+1. **Settings** → **Deploy** → **Custom Start Command**：**留空**（不要填 `python telegram_bot.py`，那是机器人）
+2. **Settings** → **Networking** → **Target port**：填 `5000` 或留空（不要填 666）
+3. **Settings** → **Networking** → **Generate Domain**：生成访问地址
 
 ### 5. 推送代码
 

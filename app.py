@@ -39,6 +39,7 @@ def images():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print(f"Starting on 0.0.0.0:{port}")
     is_prod = "RAILWAY_ENVIRONMENT" in os.environ
     if is_prod:
         app.run(host="0.0.0.0", port=port)
