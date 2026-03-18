@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from crawler import crawl
 from image_crawler import crawl_and_save, load_from_json
 
@@ -17,8 +17,8 @@ app = Flask(__name__)
 _images_cache: list = []
 _images_lock = threading.Lock()
 
-# 爬取间隔（秒），默认 5 分钟
-CRAWL_INTERVAL = int(os.environ.get("CRAWL_INTERVAL", 300))
+# 爬取间隔（秒），默认 60 秒
+CRAWL_INTERVAL = int(os.environ.get("CRAWL_INTERVAL", 60))
 
 
 def _update_images():
@@ -50,14 +50,32 @@ def index():
     return render_template("index.html", items=items)
 
 
+PER_PAGE = 9
+
+
 @app.route("/images")
 def images():
-    """图片页：展示缓存内容，后台每 N 分钟自动更新"""
+    """图片页：展示缓存内容，每页 9 条，60 秒自动更新"""
     with _images_lock:
         items = _images_cache.copy()
     if not items:
         items = load_from_json()
-    return render_template("images.html", items=items)
+    page = request.args.get("page", 1, type=int)
+    page = max(1, page)
+    total = len(items)
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = min(page, total_pages)
+    start = (page - 1) * PER_PAGE
+    end = start + PER_PAGE
+    page_items = items[start:end]
+    return render_template(
+        "images.html",
+        items=page_items,
+        current_page=page,
+        total_pages=total_pages,
+        total=total,
+        crawl_interval=CRAWL_INTERVAL,
+    )
 
 
 if __name__ == "__main__":

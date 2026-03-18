@@ -5,6 +5,7 @@
 """
 import json
 import os
+import random
 from pathlib import Path
 from urllib.parse import urljoin
 import requests
@@ -17,13 +18,15 @@ DATA_DIR = Path(__file__).parent / "data"
 IMAGES_JSON = DATA_DIR / "images.json"
 
 # picsum.photos 提供免费图片 API，无反爬
-PICSUM_API = "https://picsum.photos/v2/list?page=1&limit=30"
+PICSUM_API_BASE = "https://picsum.photos/v2/list"
 
 
 def crawl_images_from_api() -> list[dict]:
-    """从 Picsum API 获取图片列表（推荐，稳定无封禁）"""
+    """从 Picsum API 获取图片列表（每次随机页码，保证更新后有新图）"""
     try:
-        r = requests.get(PICSUM_API, timeout=10)
+        page = random.randint(1, 50)  # 随机页，每次爬取不同图片
+        url = f"{PICSUM_API_BASE}?page={page}&limit=30"
+        r = requests.get(url, timeout=10)
         r.raise_for_status()
         data = r.json()
         items = []
