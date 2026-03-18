@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from flask import Flask, render_template, request
 from crawler import crawl
-from image_crawler import crawl_and_save, load_from_json
+from image_crawler import crawl_and_save, load_from_json, list_sources, get_categories
 
 app = Flask(__name__)
 
@@ -55,19 +55,33 @@ PER_PAGE = 9
 
 @app.route("/images")
 def images():
-    """图片页：展示缓存内容，每页 9 条，60 秒自动更新"""
-    with _images_lock:
-        items = _images_cache.copy()
-    if not items:
-        items = load_from_json()
+    """图片页：支持切换数据源、按分类筛选"""
+    source = request.args.get("source", "")
+    category = request.args.get("category", "")
     page = request.args.get("page", 1, type=int)
     page = max(1, page)
+
+    # 加载数据：指定 source 则从文件读，否则用缓存
+    if source:
+        items = load_from_json(source_name=source)
+    else:
+        with _images_lock:
+            items = _images_cache.copy()
+        if not items:
+            items = load_from_json()
+    # 按分类筛选
+    if category:
+        items = [x for x in items if (x.get("category") or "未分类") == category]
     total = len(items)
     total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
     page = min(page, total_pages)
     start = (page - 1) * PER_PAGE
     end = start + PER_PAGE
     page_items = items[start:end]
+
+    sources = list_sources()
+    categories = get_categories(source_name=source if source else None)
+
     return render_template(
         "images.html",
         items=page_items,
@@ -75,6 +89,10 @@ def images():
         total_pages=total_pages,
         total=total,
         crawl_interval=CRAWL_INTERVAL,
+        sources=sources,
+        categories=categories,
+        current_source=source or (sources[0]["name"] if sources else ""),
+        current_category=category,
     )
 
 
