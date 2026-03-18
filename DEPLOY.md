@@ -42,6 +42,42 @@ git push -u origin main
 
 ---
 
+## 网页（爬虫+图片）部署到 Railway
+
+### 1. 新建 Web 服务
+
+1. 在 Railway 项目中点击 **+ New** → **GitHub Repo**
+2. 选择同一仓库（如 lijie0001/6666）
+
+### 2. 配置构建
+
+1. 进入新服务 → **Settings** → **Build**
+2. **Dockerfile Path** 填：`Dockerfile.web`
+3. **Builder** 选择 Dockerfile
+
+### 3. 配置部署
+
+1. **Settings** → **Deploy**
+2. **Start Command** 留空（Dockerfile 已指定）或填：`python app.py`
+3. **Pre-deploy command** 留空
+
+### 4. 生成域名
+
+1. **Settings** → **Networking** → **Generate Domain**
+2. 获得类似 `xxx.web.app` 的访问地址
+
+### 5. 推送代码
+
+```bash
+git add app.py crawler.py image_crawler.py templates/ Dockerfile.web
+git commit -m "web app"
+git push
+```
+
+部署完成后访问：`https://你的域名.web.app` 和 `https://你的域名.web.app/images`
+
+---
+
 ## 方式二：Render
 
 1. 打开 https://render.com，用 GitHub 登录
