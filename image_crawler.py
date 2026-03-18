@@ -67,9 +67,12 @@ def crawl_images_from_html(url: str = None) -> list[dict]:
 
 def save_to_json(items: list[dict], path: Path = IMAGES_JSON) -> Path:
     """保存到 JSON 文件"""
-    DATA_DIR.mkdir(exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    try:
+        DATA_DIR.mkdir(exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # Railway 等环境可能无法写入，不阻塞
     return path
 
 
