@@ -266,26 +266,40 @@ def crawl_images_from_custom_urls() -> list[dict]:
     return items
 
 
+def _dedupe_by_url(items: list[dict]) -> list[dict]:
+    """按 URL 去重，保留首次出现的"""
+    seen = set()
+    out = []
+    for x in items:
+        url = (x.get("url") or "").strip()
+        if url and url not in seen:
+            seen.add(url)
+            out.append(_normalize_item(x))
+    return out
+
+
 def _save_category(category: str, new_items: list[dict], accumulate: bool) -> list[dict]:
-    """爬取某分类并存入对应 JSON 文件"""
+    """爬取某分类并存入对应 JSON 文件（按 URL 去重）"""
     path = _get_category_path(category)
     valid = [x for x in new_items if x.get("url")]
     if not valid:
         return load_from_json(source_name=category)
 
     if not accumulate:
-        save_to_json(valid, path)
-        return valid
+        deduped = _dedupe_by_url(valid)
+        save_to_json(deduped, path)
+        return deduped
 
     existing = load_from_json(path=path)
-    seen_ids = {str(x.get("id", "")) for x in existing}
+    seen_urls = {(x.get("url") or "").strip() for x in existing if x.get("url")}
     merged = existing.copy()
     for item in valid:
-        iid = str(item.get("id", ""))
-        if iid and iid not in seen_ids:
+        url = (item.get("url") or "").strip()
+        if url and url not in seen_urls:
             merged.append(_normalize_item(item))
-            seen_ids.add(iid)
+            seen_urls.add(url)
 
+    merged = _dedupe_by_url(merged)  # 对已有数据也去重
     if len(merged) > MAX_PER_FILE:
         merged = merged[-MAX_PER_FILE:]
     save_to_json(merged, path)
