@@ -137,59 +137,35 @@ def _normalize_item(item: dict) -> dict:
     }
 
 
-def _get_data_files() -> list[Path]:
-    """获取所有数据文件，按顺序：images.json, images_2, images_3..."""
+def _category_to_filename(category: str) -> str:
+    """分类名转安全文件名"""
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in category)
+    return safe or "未分类"
+
+
+def _get_category_files() -> list[Path]:
+    """获取所有分类 JSON 文件（data/分类.json）"""
     DATA_DIR.mkdir(exist_ok=True)
-    files = []
-    if (DATA_DIR / "images.json").exists():
-        files.append(DATA_DIR / "images.json")
-    # images_N.json 按数字排序
-    extra = list(DATA_DIR.glob("images_*.json"))
-    def _num(p):
-        try:
-            return int(p.stem.split("_")[-1])
-        except (ValueError, IndexError):
-            return 0
-    for p in sorted(extra, key=_num):
-        files.append(p)
-    return files
+    return sorted(DATA_DIR.glob("*.json"), key=lambda p: p.stem)
 
 
 def list_sources() -> list[dict]:
-    """列出所有数据源：{name, path, count}"""
+    """列出所有数据源（按分类分文件）：{name, path, count}"""
     result = []
-    for path in _get_data_files():
+    for path in _get_category_files():
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             count = len(data) if isinstance(data, list) else 0
         except Exception:
             count = 0
-        name = path.stem  # images 或 images_2
-        result.append({"name": name, "path": str(path), "count": count})
+        result.append({"name": path.stem, "path": str(path), "count": count})
     return result
 
 
-def _get_current_write_path() -> Path:
-    """获取当前写入目标文件（未满的最后一个，或新建）"""
-    files = _get_data_files()
-    for path in reversed(files):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if len(data) < MAX_PER_FILE:
-                return path
-        except Exception:
-            continue
-    # 全部满或为空，新建
-    if not files:
-        return DATA_DIR / "images.json"
-    last = files[-1]
-    stem = last.stem
-    if stem == "images":
-        return DATA_DIR / "images_2.json"
-    num = int(stem.split("_")[-1]) + 1
-    return DATA_DIR / f"images_{num}.json"
+def _get_category_path(category: str) -> Path:
+    """获取某分类的 JSON 文件路径"""
+    return DATA_DIR / f"{_category_to_filename(category)}.json"
 
 
 def save_to_json(items: list[dict], path: Path) -> Path:
@@ -205,15 +181,16 @@ def save_to_json(items: list[dict], path: Path) -> Path:
 
 
 def load_from_json(path: Path = None, source_name: str = None) -> list[dict]:
-    """从 JSON 加载。可传 path 或 source_name（如 images、images_2）"""
+    """从 JSON 加载。source_name=分类名，如 人像、漫威"""
     if path is None:
         if source_name:
-            p = DATA_DIR / f"{source_name}.json"
+            p = _get_category_path(source_name)
         else:
-            p = _get_current_write_path()
+            sources = list_sources()
+            p = DATA_DIR / f"{sources[0]['name']}.json" if sources else None
     else:
         p = Path(path) if isinstance(path, str) else path
-    if not p.exists():
+    if p is None or not p.exists():
         return []
     with open(p, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -289,48 +266,68 @@ def crawl_images_from_custom_urls() -> list[dict]:
     return items
 
 
-def crawl_and_save(use_api: bool = True, accumulate: bool = None) -> list[dict]:
-    """爬取并保存。多源：picsum、人像、枪械模型、漫威等，满 20 万条则新建文件。"""
-    if accumulate is None:
-        accumulate = os.environ.get("ACCUMULATE_IMAGES", "true").lower() == "true"
-    new_items = []
-    if use_api:
-        # 自定义网站（CRAWL_URLS）
-        new_items.extend(crawl_images_from_custom_urls())
-        # 内置分类
-        categories = _get_crawl_categories()
-        for cat in categories:
-            if cat == "picsum.photos":
-                new_items.extend(crawl_images_from_api())
-            elif cat == "人像":
-                new_items.extend(crawl_images_from_picz())
-            else:
-                new_items.extend(crawl_images_from_picsum_category(cat, count=8))
-    else:
-        new_items = crawl_images_from_html()
-    if not accumulate:
-        path = _get_current_write_path()
-        save_to_json(new_items, path)
-        return new_items
+def _save_category(category: str, new_items: list[dict], accumulate: bool) -> list[dict]:
+    """爬取某分类并存入对应 JSON 文件"""
+    path = _get_category_path(category)
+    valid = [x for x in new_items if x.get("url")]
+    if not valid:
+        return load_from_json(source_name=category)
 
-    path = _get_current_write_path()
+    if not accumulate:
+        save_to_json(valid, path)
+        return valid
+
     existing = load_from_json(path=path)
     seen_ids = {str(x.get("id", "")) for x in existing}
     merged = existing.copy()
-    for item in new_items:
+    for item in valid:
         iid = str(item.get("id", ""))
-        url = item.get("url", "")
-        if iid and url and iid not in seen_ids:
+        if iid and iid not in seen_ids:
             merged.append(_normalize_item(item))
             seen_ids.add(iid)
 
-    if len(merged) <= MAX_PER_FILE:
-        save_to_json(merged, path)
-        return merged
-    # 满 20 万：保存当前，新建文件存溢出
-    to_save = merged[:MAX_PER_FILE]
-    overflow = merged[MAX_PER_FILE:]
-    save_to_json(to_save, path)
-    next_path = _get_current_write_path()  # 会返回新路径
-    save_to_json(overflow, next_path)
-    return load_from_json(path=next_path)
+    if len(merged) > MAX_PER_FILE:
+        merged = merged[-MAX_PER_FILE:]
+    save_to_json(merged, path)
+    return merged
+
+
+def crawl_and_save(use_api: bool = True, accumulate: bool = None) -> list[dict]:
+    """按分类分别爬取、分别存 JSON。人像→人像.json，漫威→漫威.json"""
+    if accumulate is None:
+        accumulate = os.environ.get("ACCUMULATE_IMAGES", "true").lower() == "true"
+    all_items = []
+
+    if use_api:
+        # 自定义网站：每 url|分类 单独存
+        for url, category in _load_crawl_urls_config():
+            try:
+                sub = crawl_images_from_html(url)
+                for x in sub:
+                    if x.get("url"):
+                        x["category"] = category
+                items = [x for x in sub if x.get("url")]
+                if items:
+                    merged = _save_category(category, items, accumulate)
+                    all_items.extend(merged)
+            except Exception:
+                pass
+
+        # 内置分类：每类单独爬、单独存
+        for cat in _get_crawl_categories():
+            if cat == "picsum.photos":
+                items = crawl_images_from_api()
+            elif cat == "人像":
+                items = crawl_images_from_picz()
+            else:
+                items = crawl_images_from_picsum_category(cat, count=8)
+            if items:
+                merged = _save_category(cat, items, accumulate)
+                all_items.extend(merged)
+    else:
+        items = crawl_images_from_html()
+        if items:
+            cat = items[0].get("category", "未分类") if items else "未分类"
+            all_items = _save_category(cat, items, accumulate)
+
+    return all_items

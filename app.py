@@ -9,27 +9,20 @@ import time
 from pathlib import Path
 from flask import Flask, render_template, request
 from crawler import crawl
-from image_crawler import crawl_and_save, load_from_json, list_sources, get_categories
+from image_crawler import crawl_and_save, load_from_json, list_sources
 
 app = Flask(__name__)
-
-# 图片缓存，后台定时更新
-_images_cache: list = []
-_images_lock = threading.Lock()
 
 # 爬取间隔（秒），默认 60 秒
 CRAWL_INTERVAL = int(os.environ.get("CRAWL_INTERVAL", 60))
 
 
 def _update_images():
-    """后台任务：爬取图片并更新缓存"""
-    global _images_cache
+    """后台任务：按分类爬取并分别存 JSON"""
     while True:
         time.sleep(CRAWL_INTERVAL)  # 先等待，避免与启动时重复
         try:
             items = crawl_and_save()
-            with _images_lock:
-                _images_cache = items
             print(f"[{time.strftime('%H:%M:%S')}] 图片已更新，共 {len(items)} 张")
         except Exception as e:
             print(f"爬取失败: {e}")
@@ -55,32 +48,21 @@ PER_PAGE = 9
 
 @app.route("/images")
 def images():
-    """图片页：支持切换数据源、按分类筛选"""
+    """图片页：数据源=分类，选人像看人像.json，选漫威看漫威.json"""
     source = request.args.get("source", "")
-    category = request.args.get("category", "")
     page = request.args.get("page", 1, type=int)
     page = max(1, page)
 
-    # 加载数据：指定 source 则从文件读，否则用缓存
-    if source:
-        items = load_from_json(source_name=source)
-    else:
-        with _images_lock:
-            items = _images_cache.copy()
-        if not items:
-            items = load_from_json()
-    # 按分类筛选
-    if category:
-        items = [x for x in items if (x.get("category") or "未分类") == category]
+    sources = list_sources()
+    if not source and sources:
+        source = sources[0]["name"]
+    items = load_from_json(source_name=source) if source else []
     total = len(items)
     total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
     page = min(page, total_pages)
     start = (page - 1) * PER_PAGE
     end = start + PER_PAGE
     page_items = items[start:end]
-
-    sources = list_sources()
-    categories = get_categories(source_name=source if source else None)
 
     return render_template(
         "images.html",
@@ -90,16 +72,14 @@ def images():
         total=total,
         crawl_interval=CRAWL_INTERVAL,
         sources=sources,
-        categories=categories,
-        current_source=source or (sources[0]["name"] if sources else ""),
-        current_category=category,
+        current_source=source or "",
     )
 
 
 if __name__ == "__main__":
     # 启动时先爬一次
     try:
-        _images_cache.extend(crawl_and_save())
+        crawl_and_save()
     except Exception:
         pass
     # 后台线程：每 CRAWL_INTERVAL 秒爬一次
