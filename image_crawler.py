@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 图片爬虫 - 抓取图片地址并保存到 JSON
-使用 picsum.photos（免费占位图，专为开发设计）
-每文件最多 20 万条，满则新建文件；支持分类（按爬取来源网站）
+多源：picsum、人像、枪械模型、漫威等；每文件最多 20 万条
+
+指定网站抓图（二选一）：
+  - data/crawl_urls.txt：每行 网址|分类
+  - 环境变量 CRAWL_URLS：url1|分类1,url2|分类2
+CRAWL_CATEGORIES: 覆盖内置分类，格式 分类1,分类2
 """
 import json
 import os
@@ -20,6 +24,12 @@ MAX_PER_FILE = 200000  # 每文件 20 万条
 
 # picsum.photos 提供免费图片 API，无反爬
 PICSUM_API_BASE = "https://picsum.photos/v2/list"
+# picz.dev 人像/肖像图片，每次请求返回随机图
+PICZ_PORTRAIT = "https://picz.dev/portrait"
+
+# 多分类爬取：每类用 picsum 不同页，保证图片不重复
+# 可通过 CRAWL_CATEGORIES 环境变量覆盖，格式：分类1,分类2,分类3
+DEFAULT_CATEGORIES = ["picsum.photos", "人像", "枪械模型", "漫威", "其他"]
 
 
 def _domain_from_url(url: str) -> str:
@@ -49,6 +59,48 @@ def crawl_images_from_api() -> list[dict]:
         return items
     except Exception:
         return [{"id": "", "url": "", "category": source}]
+
+
+def crawl_images_from_picsum_category(category: str, count: int = 10) -> list[dict]:
+    """从 Picsum 按页爬取，打上指定分类（不同分类用不同页范围，减少重复）"""
+    items = []
+    try:
+        # 按分类名 hash 选页范围，保证每类有不同图片
+        base = abs(hash(category)) % 40
+        page = base + random.randint(0, 9)
+        url = f"{PICSUM_API_BASE}?page={page}&limit={count}"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        for i, item in enumerate(data[:count]):
+            items.append({
+                "id": f"{category}_{item.get('id', i)}_{base}",
+                "url": item.get("download_url", ""),
+                "category": category,
+            })
+    except Exception:
+        pass
+    return items if items else [{"id": "", "url": "", "category": category}]
+
+
+def crawl_images_from_picz(count: int = 15) -> list[dict]:
+    """从 picz.dev 爬取人像图片（分类=人像）"""
+    source = "人像"
+    items = []
+    try:
+        seen = set()
+        for i in range(count):
+            r = requests.get(PICZ_PORTRAIT, allow_redirects=True, timeout=15)
+            if r.status_code == 200 and r.url and r.url not in seen:
+                seen.add(r.url)
+                items.append({
+                    "id": f"picz_{i}_{hash(r.url) & 0x7FFFFFFF}",
+                    "url": r.url,
+                    "category": source,
+                })
+    except Exception:
+        pass
+    return items if items else [{"id": "", "url": "", "category": source}]
 
 
 def crawl_images_from_html(url: str = None) -> list[dict]:
@@ -180,11 +232,82 @@ def get_categories(source_name: str = None) -> list[str]:
     return cats
 
 
+def _get_crawl_categories() -> list[str]:
+    """获取要爬取的分类列表"""
+    env = os.environ.get("CRAWL_CATEGORIES", "")
+    if env:
+        return [c.strip() for c in env.split(",") if c.strip()]
+    return DEFAULT_CATEGORIES
+
+
+def _load_crawl_urls_config() -> list[tuple[str, str]]:
+    """加载指定网站配置：优先 CRAWL_URLS 环境变量，否则读 data/crawl_urls.txt"""
+    env = os.environ.get("CRAWL_URLS", "").strip()
+    if env:
+        pairs = []
+        for part in env.split(","):
+            part = part.strip()
+            if "|" in part:
+                url, cat = part.split("|", 1)
+                url, cat = url.strip(), cat.strip()
+                if url and cat:
+                    pairs.append((url, cat))
+        return pairs
+    # 从配置文件读取
+    cfg = DATA_DIR / "crawl_urls.txt"
+    if not cfg.exists():
+        return []
+    pairs = []
+    with open(cfg, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "|" in line:
+                url, cat = line.split("|", 1)
+                url, cat = url.strip(), cat.strip()
+                if url and cat:
+                    pairs.append((url, cat))
+    return pairs
+
+
+def crawl_images_from_custom_urls() -> list[dict]:
+    """从指定网站抓图（CRAWL_URLS 或 data/crawl_urls.txt）"""
+    pairs = _load_crawl_urls_config()
+    if not pairs:
+        return []
+    items = []
+    for url, category in pairs:
+        try:
+            sub = crawl_images_from_html(url)
+            for x in sub:
+                if x.get("url"):
+                    x["category"] = category
+                    items.append(x)
+        except Exception:
+            pass
+    return items
+
+
 def crawl_and_save(use_api: bool = True, accumulate: bool = None) -> list[dict]:
-    """爬取并保存。满 20 万条则新建文件。"""
+    """爬取并保存。多源：picsum、人像、枪械模型、漫威等，满 20 万条则新建文件。"""
     if accumulate is None:
         accumulate = os.environ.get("ACCUMULATE_IMAGES", "true").lower() == "true"
-    new_items = crawl_images_from_api() if use_api else crawl_images_from_html()
+    new_items = []
+    if use_api:
+        # 自定义网站（CRAWL_URLS）
+        new_items.extend(crawl_images_from_custom_urls())
+        # 内置分类
+        categories = _get_crawl_categories()
+        for cat in categories:
+            if cat == "picsum.photos":
+                new_items.extend(crawl_images_from_api())
+            elif cat == "人像":
+                new_items.extend(crawl_images_from_picz())
+            else:
+                new_items.extend(crawl_images_from_picsum_category(cat, count=8))
+    else:
+        new_items = crawl_images_from_html()
     if not accumulate:
         path = _get_current_write_path()
         save_to_json(new_items, path)
